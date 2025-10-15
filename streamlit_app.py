@@ -419,7 +419,7 @@ with tab3:
     
     # Contact information
     st.markdown("---")
-    st.markdown("🔗 [Return to Main Website](https://yourusername.github.io) | 📧 Contact: your-email@example.com")
+    st.markdown("🔗 [Return to Main Website](https://yourusername.github.io) | 📧 Contact: lhyiris@outlook.com")
 
 # Footer
 st.markdown("---")
@@ -431,3 +431,4 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
