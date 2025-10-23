@@ -1,5 +1,6 @@
 """
 ResistanceCascade Streamlit Web App
+Web version of your model with real-time visualization
 """
 import streamlit as st
 import pandas as pd
@@ -9,10 +10,9 @@ import time
 from datetime import datetime
 
 # Import your model
-# Make sure the resistance_cascade folder is in the same directory
 from resistance_cascade.model import ResistanceCascade
 
-# Set page configuration
+# Page configuration
 st.set_page_config(
     page_title="Resistance Cascade Model",
     page_icon="🔥",
@@ -46,16 +46,16 @@ st.markdown("""
 # Title and introduction
 st.title("🔥 Resistance Cascade Interactive Model")
 st.markdown("""
-This model demonstrates how protest activities spread through populations. You can adjust parameters to explore cascade dynamics under different conditions.
+This model demonstrates how protest activities spread through populations. Adjust parameters to explore cascade dynamics under different conditions.
 """)
 
 # Sidebar - Parameter settings
-st.sidebar.header("⚙️ Model Parameter Settings")
+st.sidebar.header("⚙️ Model Parameters")
 
 # Basic parameters
-st.sidebar.subheader("Basic Parameters")
+st.sidebar.subheader("Basic Settings")
 
-# Use columns to display parameters side by side
+# Use columns for side-by-side display
 col1, col2 = st.sidebar.columns(2)
 
 with col1:
@@ -65,8 +65,28 @@ with col1:
 
 with col2:
     height = st.number_input("Grid Height", min_value=20, max_value=100, value=40, step=10)
-    max_iters = st.slider("Maximum Steps", 100, 1000, 500, 50)
+    max_iters = st.slider("Max Steps", 100, 1000, 500, 50)
     
+# Visualization settings
+st.sidebar.subheader("🎬 Visualization Settings")
+update_frequency = st.sidebar.slider(
+    "Update Frequency (every N steps)", 
+    min_value=1, 
+    max_value=20, 
+    value=5, 
+    step=1,
+    help="Lower values update more frequently but may slow down the simulation"
+)
+
+animation_speed = st.sidebar.slider(
+    "Animation Speed",
+    min_value=0.0,
+    max_value=0.5,
+    value=0.01,
+    step=0.01,
+    help="Delay between steps (seconds). 0 = fastest"
+)
+
 # Key parameters
 st.sidebar.subheader("🎯 Key Parameters")
 
@@ -76,7 +96,7 @@ epsilon = st.sidebar.slider(
     max_value=1.5, 
     value=0.5, 
     step=0.1,
-    help="The degree to which people misjudge the actual situation. Higher values indicate less accurate information."
+    help="Degree of misjudgment about the actual situation. Higher values mean less accurate information."
 )
 
 security_density = st.sidebar.slider(
@@ -94,7 +114,7 @@ pp_mean = st.sidebar.slider(
     max_value=0.0, 
     value=-0.5, 
     step=0.1,
-    help="On average, whether people privately support(-1) or oppose(0) the regime."
+    help="On average, do people support (-1) or oppose (0) the regime internally."
 )
 
 threshold = st.sidebar.slider(
@@ -103,20 +123,20 @@ threshold = st.sidebar.slider(
     max_value=5.0, 
     value=3.5, 
     step=0.1,
-    help="The level of encouragement needed for people to participate in protests."
+    help="Level of encouragement needed for people to participate in protests."
 )
 
-# Add parameter explanation
-with st.sidebar.expander("❓ Parameter Explanation"):
+# Parameter explanations
+with st.sidebar.expander("❓ Parameter Guide"):
     st.write("""
-    - **Information Uncertainty**: Simulates the effects of information control and rumors
-    - **Security Force Density**: Strength of suppression capability
-    - **Private Preference**: People's true attitudes
+    - **Information Uncertainty**: Simulates information control and rumors
+    - **Security Force Density**: Strength of repression capability
+    - **Private Preference**: True attitudes of the population
     - **Activation Threshold**: Psychological barrier to participation
     """)
 
 # Main interface layout
-tab1, tab2, tab3 = st.tabs(["🚀 Run Simulation", "📊 History Records", "📖 Model Explanation"])
+tab1, tab2, tab3 = st.tabs(["🚀 Run Simulation", "📊 History", "📖 Model Guide"])
 
 with tab1:
     # Run button
@@ -128,6 +148,10 @@ with tab1:
         # Create placeholders
         status_placeholder = st.empty()
         progress_bar = st.progress(0)
+        
+        # Create real-time chart placeholders
+        chart_placeholder = st.empty()
+        metrics_placeholder = st.empty()
         
         # Run model
         status_placeholder.info("🔄 Initializing model...")
@@ -157,6 +181,9 @@ with tab1:
         start_time = time.time()
         step = 0
         
+        # Create initial chart
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
         while model.running and step < max_iters:
             model.step()
             
@@ -171,19 +198,78 @@ with tab1:
             progress = (step + 1) / max_iters
             progress_bar.progress(progress)
             
-            # Update status
-            if step % 10 == 0:
+            # Real-time chart update (every N steps)
+            if step % update_frequency == 0 or step == max_iters - 1:
+                # Clear old charts
+                ax1.clear()
+                ax2.clear()
+                
+                # Left chart: Population state changes
+                ax1.plot(time_steps, active_counts, label='Active Protesters', color='#FE6100', linewidth=2)
+                ax1.plot(time_steps, support_counts, label='Supporters', color='#648FFF', linewidth=2)
+                ax1.plot(time_steps, oppose_counts, label='Opponents', color='#A020F0', linewidth=2)
+                ax1.plot(time_steps, jail_counts, label='Arrested', color='#000000', linewidth=2, linestyle='--')
+                
+                ax1.set_xlabel('Time Step', fontsize=10)
+                ax1.set_ylabel('Count', fontsize=10)
+                ax1.set_title('Population State Evolution (Real-time)', fontsize=12, fontweight='bold')
+                ax1.legend(loc='best', fontsize=9)
+                ax1.grid(True, alpha=0.3)
+                
+                # Right chart: Participation rate changes
+                participation_rate = [a / model.citizen_count * 100 for a in active_counts]
+                ax2.fill_between(time_steps, participation_rate, alpha=0.3, color='#FE6100')
+                ax2.plot(time_steps, participation_rate, color='#FE6100', linewidth=2)
+                ax2.axhline(y=5, color='red', linestyle='--', alpha=0.5, label='5% Critical Line')
+                
+                ax2.set_xlabel('Time Step', fontsize=10)
+                ax2.set_ylabel('Participation Rate (%)', fontsize=10)
+                ax2.set_title('Protest Participation Rate (Real-time)', fontsize=12, fontweight='bold')
+                ax2.legend(fontsize=9)
+                ax2.grid(True, alpha=0.3)
+                
+                plt.tight_layout()
+                
+                # Update chart
+                chart_placeholder.pyplot(fig)
+                
+                # Update real-time metrics
+                with metrics_placeholder.container():
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Current Step", f"{step}/{max_iters}")
+                    
+                    with col2:
+                        current_participation = (model.active_count / model.citizen_count * 100) if model.citizen_count > 0 else 0
+                        st.metric("Current Participation", f"{current_participation:.1f}%")
+                    
+                    with col3:
+                        max_so_far = max(active_counts) if active_counts else 0
+                        st.metric("Peak So Far", f"{max_so_far} people")
+                    
+                    with col4:
+                        st.metric("Arrested", f"{model.count_jail(model)} people")
+                
+                # Update status
                 status_placeholder.info(f"🔄 Simulation in progress... Step {step}/{max_iters}")
+                
+                # Add delay for animation observation
+                if animation_speed > 0:
+                    time.sleep(animation_speed)
             
             step += 1
         
-        # Simulation completed
+        # Close chart object
+        plt.close(fig)
+        
+        # Simulation complete
         simulation_time = time.time() - start_time
-        status_placeholder.success(f"✅ Simulation completed! Time taken: {simulation_time:.2f} seconds")
+        status_placeholder.success(f"✅ Simulation complete! Completed in {simulation_time:.2f} seconds, {step} steps total")
         progress_bar.empty()
         
-        # Display results
-        st.subheader("📊 Simulation Results")
+        # Display final results
+        st.subheader("📊 Final Results")
         
         # Key metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -196,18 +282,19 @@ with tab1:
             )
         
         with col2:
-            max_participation = max(active_counts) / model.citizen_count * 100
+            max_participation = max(active_counts) / model.citizen_count * 100 if model.citizen_count > 0 else 0
             st.metric(
-                "Peak Participation Rate", 
+                "Peak Participation", 
                 f"{max_participation:.1f}%",
                 delta=f"{max_participation - 5:.1f}%" if max_participation > 5 else None
             )
         
         with col3:
+            peak_step = active_counts.index(max(active_counts)) if active_counts else 0
             st.metric(
                 "Time to Peak", 
-                f"Step {active_counts.index(max(active_counts))}",
-                delta="Fast" if active_counts.index(max(active_counts)) < 50 else "Slow"
+                f"Step {peak_step}",
+                delta="Fast" if peak_step < 50 else "Slow"
             )
         
         with col4:
@@ -217,49 +304,49 @@ with tab1:
                 delta=f"{model.active_count - model.citizen_count * 0.1:.0f}"
             )
         
-        # Dynamic charts
-        st.subheader("📈 Population Dynamics")
+        # Redraw final chart (higher quality)
+        st.subheader("📈 Complete Evolution Process")
         
-        # Create charts
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        final_fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
         
         # Left chart: Population state changes
-        ax1.plot(time_steps, active_counts, label='Active Protesters', color='#FE6100', linewidth=2)
-        ax1.plot(time_steps, support_counts, label='Supporters', color='#648FFF', linewidth=2)
-        ax1.plot(time_steps, oppose_counts, label='Opponents', color='#A020F0', linewidth=2)
-        ax1.plot(time_steps, jail_counts, label='Arrested', color='#000000', linewidth=2, linestyle='--')
+        ax1.plot(time_steps, active_counts, label='Active Protesters', color='#FE6100', linewidth=2.5)
+        ax1.plot(time_steps, support_counts, label='Supporters', color='#648FFF', linewidth=2.5)
+        ax1.plot(time_steps, oppose_counts, label='Opponents', color='#A020F0', linewidth=2.5)
+        ax1.plot(time_steps, jail_counts, label='Arrested', color='#000000', linewidth=2.5, linestyle='--')
         
-        ax1.set_xlabel('Time Step')
-        ax1.set_ylabel('Number of People')
-        ax1.set_title('Population State Evolution')
-        ax1.legend(loc='best')
+        ax1.set_xlabel('Time Step', fontsize=12)
+        ax1.set_ylabel('Count', fontsize=12)
+        ax1.set_title('Population State Evolution', fontsize=14, fontweight='bold')
+        ax1.legend(loc='best', fontsize=11)
         ax1.grid(True, alpha=0.3)
         
         # Right chart: Participation rate changes
         participation_rate = [a / model.citizen_count * 100 for a in active_counts]
         ax2.fill_between(time_steps, participation_rate, alpha=0.3, color='#FE6100')
-        ax2.plot(time_steps, participation_rate, color='#FE6100', linewidth=2)
-        ax2.axhline(y=5, color='red', linestyle='--', alpha=0.5, label='5% Critical Line')
+        ax2.plot(time_steps, participation_rate, color='#FE6100', linewidth=2.5)
+        ax2.axhline(y=5, color='red', linestyle='--', alpha=0.5, label='5% Critical Line', linewidth=2)
         
-        ax2.set_xlabel('Time Step')
-        ax2.set_ylabel('Participation Rate (%)')
-        ax2.set_title('Protest Participation Rate Changes')
-        ax2.legend()
+        ax2.set_xlabel('Time Step', fontsize=12)
+        ax2.set_ylabel('Participation Rate (%)', fontsize=12)
+        ax2.set_title('Protest Participation Rate', fontsize=14, fontweight='bold')
+        ax2.legend(fontsize=11)
         ax2.grid(True, alpha=0.3)
         
         plt.tight_layout()
-        st.pyplot(fig)
+        st.pyplot(final_fig)
+        plt.close(final_fig)
         
         # Data table
         with st.expander("📊 View Detailed Data"):
             # Create dataframe
             df = pd.DataFrame({
-                'Time Step': time_steps[::10],  # Display every 10 steps
-                'Active Count': active_counts[::10],
-                'Support Count': support_counts[::10],
-                'Oppose Count': oppose_counts[::10],
-                'Arrested Count': jail_counts[::10],
-                'Participation Rate(%)': [f"{x:.1f}" for x in participation_rate[::10]]
+                'Time Step': time_steps[::10],  # Show every 10th step
+                'Active': active_counts[::10],
+                'Supporters': support_counts[::10],
+                'Opponents': oppose_counts[::10],
+                'Arrested': jail_counts[::10],
+                'Participation (%)': [f"{x:.1f}" for x in participation_rate[::10]]
             })
             st.dataframe(df, use_container_width=True)
             
@@ -287,13 +374,13 @@ with tab1:
             'results': {
                 'revolution': model.revolution,
                 'max_participation': max_participation,
-                'peak_time': active_counts.index(max(active_counts)),
+                'peak_time': peak_step,
                 'final_active': model.active_count
             }
         })
 
 with tab2:
-    st.subheader("📊 Historical Run Records")
+    st.subheader("📊 Simulation History")
     
     if 'history' in st.session_state and st.session_state.history:
         # Convert to dataframe
@@ -302,11 +389,11 @@ with tab2:
             record = {
                 'Time': h['timestamp'].strftime('%H:%M:%S'),
                 'ε': h['params']['epsilon'],
-                'Security Density': h['params']['security_density'],
-                'Private Preference': h['params']['pp_mean'],
+                'Security': h['params']['security_density'],
+                'Preference': h['params']['pp_mean'],
                 'Threshold': h['params']['threshold'],
                 'Revolution': '✅' if h['results']['revolution'] else '❌',
-                'Peak Participation': f"{h['results']['max_participation']:.1f}%",
+                'Peak Rate': f"{h['results']['max_participation']:.1f}%",
                 'Peak Time': h['results']['peak_time']
             }
             history_data.append(record)
@@ -321,15 +408,15 @@ with tab2:
             # Select parameter to analyze
             param_to_analyze = st.selectbox(
                 "Select parameter to analyze",
-                ['ε', 'Security Density', 'Private Preference', 'Threshold']
+                ['ε', 'Security', 'Preference', 'Threshold']
             )
             
             # Create scatter plot
             fig, ax = plt.subplots(figsize=(10, 6))
             
             x_data = [h['params']['epsilon'] if param_to_analyze == 'ε' 
-                     else h['params']['security_density'] if param_to_analyze == 'Security Density'
-                     else h['params']['pp_mean'] if param_to_analyze == 'Private Preference'
+                     else h['params']['security_density'] if param_to_analyze == 'Security'
+                     else h['params']['pp_mean'] if param_to_analyze == 'Preference'
                      else h['params']['threshold'] 
                      for h in st.session_state.history]
             
@@ -338,9 +425,9 @@ with tab2:
                      for h in st.session_state.history]
             
             scatter = ax.scatter(x_data, y_data, c=colors, s=100, alpha=0.6)
-            ax.set_xlabel(param_to_analyze)
-            ax.set_ylabel('Peak Participation Rate (%)')
-            ax.set_title(f'{param_to_analyze} Impact on Participation Rate')
+            ax.set_xlabel(param_to_analyze, fontsize=12)
+            ax.set_ylabel('Peak Participation Rate (%)', fontsize=12)
+            ax.set_title(f'Impact of {param_to_analyze} on Participation', fontsize=14, fontweight='bold')
             ax.grid(True, alpha=0.3)
             
             # Add legend
@@ -348,19 +435,20 @@ with tab2:
                                    markerfacecolor='g', markersize=10, label='Revolution Success')
             red_patch = plt.Line2D([0], [0], marker='o', color='w', 
                                  markerfacecolor='r', markersize=10, label='Revolution Failed')
-            ax.legend(handles=[green_patch, red_patch])
+            ax.legend(handles=[green_patch, red_patch], fontsize=10)
             
             st.pyplot(fig)
+            plt.close(fig)
         
         # Clear history button
-        if st.button("🗑️ Clear History Records"):
+        if st.button("🗑️ Clear History"):
             st.session_state.history = []
-            st.experimental_rerun()
+            st.rerun()
     else:
-        st.info("No run records yet. Historical data will be displayed here after running some simulations.")
+        st.info("No simulation history yet. Run some simulations to see historical data here.")
 
 with tab3:
-    st.subheader("📖 Model Explanation")
+    st.subheader("📖 Model Guide")
     
     col1, col2 = st.columns(2)
     
@@ -368,18 +456,18 @@ with tab3:
         st.markdown("""
         ### Model Principles
         
-        This is an **Agent-Based Model** that simulates how individuals decide whether to participate in protests:
+        This is an **Agent-Based Model (ABM)** that simulates how individuals decide whether to participate in protests:
         
-        1. **Individual Decision-Making**: Each person decides based on surrounding behavior and personal preferences
-        2. **Information Spread**: People observe their surroundings, but information may be inaccurate
-        3. **Suppression Risk**: Security forces arrest active protesters
+        1. **Individual Decision-Making**: Each person decides based on their neighbors' behavior and personal preferences
+        2. **Information Propagation**: People observe their surroundings, but information may be inaccurate
+        3. **Repression Risk**: Security forces arrest active protesters
         4. **Cascade Effect**: When enough people participate, it triggers a chain reaction
         
         ### Key Mechanisms
         
         - **Threshold Model**: People have different participation thresholds
-        - **Spatial Interaction**: Can only see nearby people
-        - **Dynamic Evolution**: Situation continuously changes over time
+        - **Spatial Interaction**: Can only observe nearby people
+        - **Dynamic Evolution**: Situation constantly changes over time
         """)
     
     with col2:
@@ -387,14 +475,14 @@ with tab3:
         ### Parameter Details
         
         **Information Uncertainty (ε)**
-        - Low values (0.1-0.3): Transparent information, people understand the real situation
-        - Medium values (0.4-0.7): Some misjudgment exists
-        - High values (0.8-1.5): Severe information confusion
+        - Low (0.1-0.3): Transparent information, people understand reality
+        - Medium (0.4-0.7): Some misjudgment
+        - High (0.8-1.5): Severe information confusion
         
         **Security Force Density**
-        - 0-1%: Almost no suppression
-        - 2-4%: Medium suppression
-        - 5-10%: Strong suppression
+        - 0-1%: Almost no repression
+        - 2-4%: Moderate repression
+        - 5-10%: Strong repression
         
         **Private Preference Mean**
         - -1.0: Strongly oppose regime
@@ -402,33 +490,34 @@ with tab3:
         - 0.0: Neutral
         
         **Activation Threshold**
-        - 2-3: Easily mobilized
-        - 3-4: Requires some encouragement
-        - 4-5: Difficult to mobilize
+        - 2-3: Easy to mobilize
+        - 3-4: Needs some encouragement
+        - 4-5: Very hard to mobilize
         """)
     
     st.markdown("---")
     
-    # Add usage tips
+    # Usage tips
     st.info("""
     💡 **Usage Tips**:
-    - Try different parameter combinations and observe result changes
-    - Pay special attention to "tipping point" phenomena - small parameter changes may lead to completely different outcomes
-    - Revolution success usually requires: low suppression + high dissatisfaction + moderate information uncertainty
+    - Try different parameter combinations and observe the results
+    - Adjust "Update Frequency" and "Animation Speed" to control visualization
+    - Pay attention to "tipping point" phenomena - small parameter changes can lead to completely different outcomes
+    - Revolution success typically requires: low repression + high discontent + moderate information uncertainty
+    - Real-time charts help you see how cascades occur
     """)
     
-    # Contact information
+    # Contact info
     st.markdown("---")
-    st.markdown("🔗 [Return to Main Website](https://yourusername.github.io) | 📧 Contact: lhyiris@outlook.com")
+    st.markdown("🔗 [Back to Main Site](https://yourusername.github.io) | 📧 Contact: your-email@example.com")
 
 # Footer
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: #666;'>
-        <p>Based on Agent-Based Model (ABM) Technology | Built with Streamlit</p>
+        <p>Based on Agent-Based Model (ABM) Technology | Built with Streamlit | Real-time Visualization Version</p>
     </div>
     """, 
     unsafe_allow_html=True
 )
-
